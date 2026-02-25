@@ -39,35 +39,36 @@
 | Файл | Описание |
 |------|----------|
 | [**FULL_BOOK.md**](FULL_BOOK.md) | Пълният текст на книгата (всички глави) |
+| [**SUMMARY.md**](SUMMARY.md) | Резюме на всяка глава |
 | [**MANIFESTO.md**](MANIFESTO.md) | Манифест: Защо SAF-T не е за адвокати |
 
 ### Основни глави
 
-| Глава | Файл | Съдържание |
-|-------|------|------------|
-| 0 | [CHAPTER_0.md](CHAPTER_0.md) | **Генетични дефекти на масовия БГ софтуер** |
-| 1 | [CHAPTER_1.md](CHAPTER_1.md) | Счетоводителят като Data Engineer |
-| 2 | [CHAPTER_2.md](CHAPTER_2.md) | Техническият скелет: XML и namespaces |
-| 3 | [CHAPTER_3.md](CHAPTER_3.md) | Счетоводни номенклатури и двойният сметкоплан |
-| 4 | [CHAPTER_4.md](CHAPTER_4.md) | Материални запаси: On-Demand отчет |
-| 5 | [CHAPTER_5.md](CHAPTER_5.md) | Номенклатури и кореспонденции |
-| 6 | [CHAPTER_6.md](CHAPTER_6.md) | Техническа реализация: Rust + SurrealDB |
-| 7 | [CHAPTER_7.md](CHAPTER_7.md) | Епилог: Краят на търговията със страх |
+| Глава | Файл | Резюме |
+|-------|------|--------|
+| 0 | [CHAPTER_0.md](CHAPTER_0.md) | **Генетични дефекти на масовия БГ софтуер** — плоски таблици с 20-30 varchar аналитичности, менталитетът на „Баба Яга", защо гъвкавостта на входа е смъртна присъда на изхода |
+| 1 | [CHAPTER_1.md](CHAPTER_1.md) | **Счетоводителят като Data Engineer** — двойна идентификация на сметки, Data Cleansing на мастър данни, мостът между вашия код и номенклатурата на НАП |
+| 2 | [CHAPTER_2.md](CHAPTER_2.md) | **XML и Namespaces** — защо XML а не Excel, nsSAFT: префикс, четирите клона (Header, MasterFiles, GeneralLedger, SourceDocuments), XSD валидация |
+| 3 | [CHAPTER_3.md](CHAPTER_3.md) | **Двойният сметкоплан** — 360 стандартни сметки на НАП, AccountID vs TaxpayerAccountID, данъчни кодове TaxTable |
+| 4 | [CHAPTER_4.md](CHAPTER_4.md) | **Материални запаси** — On-Demand отчет като дигитална ревизия, PhysicalStock, MovementOfGoods, конверсии на мерни единици |
+| 5 | [CHAPTER_5.md](CHAPTER_5.md) | **Номенклатури и кореспонденции** — Movement Types, мапинг двигател с SurrealQL, Python уеднаквяване на мерни единици |
+| 6 | [CHAPTER_6.md](CHAPTER_6.md) | **Техническа реализация** — ~1300 реда Rust, streaming XML с quick_xml, SAF-T ID префикси, Monthly/OnDemand/Annual, Pre-flight валидация |
+| 7 | [CHAPTER_7.md](CHAPTER_7.md) | **Епилог** — край на търговията със страх, счетоводителят като Data Engineer, истината е в кода |
 
 ### Разширени глави
 
-| Глава | Файл | Съдържание |
-|-------|------|------------|
-| 8 | [CHAPTER_8.md](CHAPTER_8.md) | **Data Engineering**: ETL pipelines, типове данни, validation |
-| 9 | [CHAPTER_9.md](CHAPTER_9.md) | **SQL vs NoSQL**: PostgreSQL и SurrealDB в сравнение |
-| 10 | [CHAPTER_10.md](CHAPTER_10.md) | **Тестване и QA**: 5 слоя валидация, pytest, CI/CD |
-| 11 | [CHAPTER_11.md](CHAPTER_11.md) | **Реални казуси**: търговец, производител, холдинг, ЕТ |
+| Глава | Файл | Резюме |
+|-------|------|--------|
+| 8 | [CHAPTER_8.md](CHAPTER_8.md) | **Data Engineering** — ETL pipeline, SurrealDB schema, Rust типобезопасни модели, Python Data Wrangling, PostgreSQL schema, Data Quality Framework |
+| 9 | [CHAPTER_9.md](CHAPTER_9.md) | **SQL vs NoSQL** — PostgreSQL vs SurrealDB, Graph relations, хибриден подход с Rust sync, performance optimization и benchmarking |
+| 10 | [CHAPTER_10.md](CHAPTER_10.md) | **Тестване и QA** — 5 слоя валидация (XSD, Data Type, Referential Integrity, Cross-module, Business Logic), Pytest, CI/CD |
+| 11 | [CHAPTER_11.md](CHAPTER_11.md) | **Реални казуси** — търговец на едро (дедупликация), производител с ВОП (VIES), холдинг (консолидация), ЕТ (опростен pipeline) |
 
 ### Приложения
 
 | Файл | Съдържание |
 |------|------------|
-| [APPENDICES.md](APPENDICES.md) | Таблица на 360 сметки, данъчни кодове, UOM, SAF-T ID префикси, пълен XML пример, FAQ |
+| [APPENDICES.md](APPENDICES.md) | 360 SAF-T сметки, данъчни кодове, мерни единици, типове движения, SAF-T ID префикси, пълен XML пример, FAQ |
 
 ---
 
