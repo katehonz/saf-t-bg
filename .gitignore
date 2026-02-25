@@ -1,0 +1,42 @@
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors / IDEs
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.sublime-*
+
+# Claude Code
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.env
+
+# Rust
+target/
+Cargo.lock
+
+# Node (ако се ползва за tooling)
+node_modules/
+
+# SAF-T генерирани файлове
+output_saft*.xml
+*.saft.xml
+
+# Temporary / backup
+*.tmp
+*.bak
+*.orig
+*.log
