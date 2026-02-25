@@ -9,7 +9,7 @@
 - **50** — Вътрешно преместване
 
 ## 5.2. Автоматизация на мапинга (The Mapping Engine)
-За да не се налага счетоводителят ръчно да избира код за всяка хилядна фактура, в Doxius използваме „Мапинг двигател“. Ето как изглежда логиката му, описана чрез **SurrealQL (NoSQL)**:
+За да не се налага счетоводителят ръчно да избира код за всяка хилядна фактура, в baraba.org използваме „Мапинг двигател“. Ето как изглежда логиката му, описана чрез **SurrealQL (NoSQL)**:
 
 ```surrealql
 -- Дефинираме правило: Всяко движение от тип 'Продажба' 
@@ -37,7 +37,7 @@ pub struct SaftSettings {
     pub uom_map: HashMap<String, String>, // Локално 'бр.' -> SAF-T 'C62'
 }
 
-// В Doxius проверяваме настройките преди експорт
+// В baraba.org проверяваме настройките преди експорт
 pub fn validate_uom(local_unit: &str, settings: &SaftSettings) -> String {
     settings.uom_map.get(local_unit)
         .cloned()
@@ -50,7 +50,7 @@ pub fn validate_uom(local_unit: &str, settings: &SaftSettings) -> String {
 Тук идва ролята на **Python** за предварителна обработка на данни (Data Wrangling):
 
 ```python
-# Python скрипт за уеднаквяване на мерни единици преди импорт в Doxius
+# Python скрипт за уеднаквяване на мерни единици преди импорт в baraba.org
 import pandas as pd
 
 def clean_uom(value):

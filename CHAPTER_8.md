@@ -583,7 +583,7 @@ CREATE TABLE companies (
     postal_code VARCHAR(10),
     phone VARCHAR(50),
     email VARCHAR(255),
-    software_id VARCHAR(50) DEFAULT 'DOXIUS',
+    software_id VARCHAR(50) DEFAULT 'BARABA',
     software_version VARCHAR(20) DEFAULT '1.0',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

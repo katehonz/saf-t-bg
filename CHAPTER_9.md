@@ -414,7 +414,7 @@ DEFINE FIELD currency ON company TYPE string DEFAULT 'BGN';
 DEFINE FIELD country ON company TYPE string DEFAULT 'BG';
 DEFINE FIELD tax_accounting_basis ON company TYPE string DEFAULT 'A';
 DEFINE FIELD is_vat_registered ON company TYPE bool DEFAULT false;
-DEFINE FIELD software_id ON company TYPE string DEFAULT 'DOXIUS';
+DEFINE FIELD software_id ON company TYPE string DEFAULT 'BARABA';
 DEFINE FIELD software_version ON company TYPE string DEFAULT '1.0';
 DEFINE FIELD created_at ON company TYPE datetime DEFAULT time::now();
 DEFINE FIELD updated_at ON company TYPE datetime DEFAULT time::now();

@@ -4,7 +4,7 @@
 
 Когато генерирате XML файл за НАП, грешка в типа на данните означава отхвърляне. Rust не позволява такива грешки по време на компилация. SurrealDB дава гъвкавост на NoSQL с мощта на релационни заявки.
 
-**Стекът на Doxius:**
+**Стекът на baraba.org:**
 - **Dioxus 0.7** — fullstack framework (SSR + WASM), едно Rust приложение за сървър и клиент
 - **SurrealDB** — документна база данни с Graph заявки и вградени типове
 - **quick_xml** — streaming XML writer, който гарантира encoding и escaping
@@ -12,10 +12,10 @@
 
 ## 6.2. Моделът на данните (Реален код)
 
-Ето как изглежда `Company` структурата в Doxius — тя носи всички полета, необходими за SAF-T Header:
+Ето как изглежда `Company` структурата в baraba.org — тя носи всички полета, необходими за SAF-T Header:
 
 ```rust
-// src/models.rs — Реален код от Doxius
+// src/models.rs — Реален код от baraba.org
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Company {
     pub id: Option<String>,
@@ -33,8 +33,8 @@ pub struct Company {
     pub building_number: Option<String>,     // SAF-T: отделно номер
     pub region: Option<String>,             // SAF-T: BG-22, BG-23...
     pub tax_accounting_basis: String,       // "A" за начисления
-    pub software_company_name: Option<String>, // "Doxius"
-    pub software_id: Option<String>,        // "DOXIUS"
+    pub software_company_name: Option<String>, // "baraba.org"
+    pub software_id: Option<String>,        // "BARABA"
     pub software_version: Option<String>,   // "1.0"
     pub currency: String,                   // "BGN" или "EUR"
     pub is_vat_registered: bool,
@@ -50,7 +50,7 @@ pub struct Company {
 Най-критичната функция — как ЕИК/ДДС номер се трансформира в SAF-T идентификатор:
 
 ```rust
-// src/pages/saft_export.rs — Реален код от Doxius
+// src/pages/saft_export.rs — Реален код от baraba.org
 fn generate_saft_id(cp: &Counterpart) -> String {
     let country = cp.country.as_deref().unwrap_or("BG");
 
@@ -91,10 +91,10 @@ fn generate_saft_id(cp: &Counterpart) -> String {
 
 ## 6.4. XML генераторът (Streaming подход)
 
-Doxius не строи XML дърво в паметта. Използваме **streaming writer** — пишем елемент по елемент, което работи за файлове от всякакъв размер:
+baraba.org не строи XML дърво в паметта. Използваме **streaming writer** — пишем елемент по елемент, което работи за файлове от всякакъв размер:
 
 ```rust
-// src/pages/saft_export.rs — Реален код от Doxius
+// src/pages/saft_export.rs — Реален код от baraba.org
 
 // Помощни функции — елегантни и безопасни
 fn w<W: std::io::Write>(writer: &mut quick_xml::Writer<W>,
@@ -147,7 +147,7 @@ fn build_saft_xml(data: &SaftData) -> Result<String, quick_xml::Error> {
 
 ## 6.5. Двойната идентификация на сметките (Мапинг в действие)
 
-Ето как Doxius реализира мапването `AccountID` ↔ `TaxpayerAccountID` в реално време:
+Ето как baraba.org реализира мапването `AccountID` ↔ `TaxpayerAccountID` в реално време:
 
 ```rust
 // При генериране на всеки ред в Главната книга
@@ -179,7 +179,7 @@ for (i, line) in je.lines.iter().enumerate() {
 
 ## 6.6. Трите лица на SAF-T (Monthly / OnDemand / Annual)
 
-Doxius генерира различен XML в зависимост от типа отчет:
+baraba.org генерира различен XML в зависимост от типа отчет:
 
 ```rust
 // Избор на MasterFiles секция според типа
@@ -207,7 +207,7 @@ close(x, master_element)?;
 
 ## 6.7. SurrealDB: Заявките за събиране на данните
 
-Преди генерацията, Doxius събира всичко необходимо с няколко заявки:
+Преди генерацията, baraba.org събира всичко необходимо с няколко заявки:
 
 ```rust
 // Журнални статии С вложени редове (subquery)
@@ -246,7 +246,7 @@ pub async fn query(sql: &str) -> Result<Vec<Value>> {
 
 ## 6.8. Валидацията преди експорт (Pre-flight check)
 
-Doxius не чака НАП да отхвърли файла. Валидацията се случва **преди** генерацията:
+baraba.org не чака НАП да отхвърли файла. Валидацията се случва **преди** генерацията:
 
 ```rust
 #[server]
@@ -369,7 +369,7 @@ audit_saft_xml("output_saft.xml")
 
 ## 6.11. Миграциите (Идемпотентна инициализация)
 
-Doxius използва SurrealDB миграции, които се изпълняват автоматично при стартиране:
+baraba.org използва SurrealDB миграции, които се изпълняват автоматично при стартиране:
 
 ```sql
 -- migrations/001_init.surql — 360 сметки от НАП номенклатурата
@@ -392,4 +392,4 @@ UPSERT saft_account:702 SET code = '702', name = 'Приходи от стоки
 
 SAF-T не е крайна цел, а само етап. Софтуерът на бъдещето ще предава данните към НАП чрез защитени API канали в реално време. Това ще премахне нуждата от месечни „кампании" по подаване на файлове.
 
-**Извод за техническите лица:** Целият SAF-T генератор на Doxius е ~1300 реда Rust код. Той покрива Monthly, On Demand и Annual отчети. Всичко е type-safe, streaming, и валидирано преди генерация. Ако вашият софтуер е изграден върху „кръпки", SAF-T ще ги разкрие.
+**Извод за техническите лица:** Целият SAF-T генератор на baraba.org е ~1300 реда Rust код. Той покрива Monthly, On Demand и Annual отчети. Всичко е type-safe, streaming, и валидирано преди генерация. Ако вашият софтуер е изграден върху „кръпки", SAF-T ще ги разкрие.

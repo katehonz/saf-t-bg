@@ -145,8 +145,8 @@
         <nsSAFT:CurrencyCode>BGN</nsSAFT:CurrencyCode>
         <nsSAFT:SelectionStartDate>2026-01-01</nsSAFT:SelectionStartDate>
         <nsSAFT:SelectionEndDate>2026-01-31</nsSAFT:SelectionEndDate>
-        <nsSAFT:SoftwareID>DOXIUS</nsSAFT:SoftwareID>
-        <nsSAFT:SoftwareDescription>Doxius Accounting System</nsSAFT:SoftwareDescription>
+        <nsSAFT:SoftwareID>BARABA</nsSAFT:SoftwareID>
+        <nsSAFT:SoftwareDescription>baraba.org Accounting System</nsSAFT:SoftwareDescription>
         <nsSAFT:SoftwareVersion>1.0.0</nsSAFT:SoftwareVersion>
     </nsSAFT:Header>
     
