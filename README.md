@@ -63,7 +63,7 @@
 | 8 | [CHAPTER_8.md](CHAPTER_8.md) | **Data Engineering** — ETL pipeline, SurrealDB schema, Rust типобезопасни модели, Python Data Wrangling, PostgreSQL schema, Data Quality Framework |
 | 9 | [CHAPTER_9.md](CHAPTER_9.md) | **SQL vs NoSQL** — PostgreSQL vs SurrealDB, Graph relations, хибриден подход с Rust sync, performance optimization и benchmarking |
 | 10 | [CHAPTER_10.md](CHAPTER_10.md) | **Тестване и QA** — 5 слоя валидация (XSD, Data Type, Referential Integrity, Cross-module, Business Logic), Pytest, CI/CD |
-| 11 | [CHAPTER_11.md](CHAPTER_11.md) | **Реални казуси** — търговец на едро (дедупликация), производител с ВОП (VIES), холдинг (консолидация), ЕТ (опростен pipeline) |
+| 11 | [CHAPTER_11.md](CHAPTER_11.md) | **Реални казуси** — търговец (дедупликация), производител (VIES), холдинг (консолидация), ЕТ (опростен pipeline) и анализ на стратегическата грешка с липсващото е-фактуриране |
 
 ### Приложения
 
