@@ -1028,7 +1028,588 @@ if __name__ == '__main__':
 | Холдинг | Междуфирмени транзакции | Консолидация, елиминации |
 | ЕТ | Ограничени ресурси | Опростен pipeline |
 
-## 11.6. Голямата стратегическа грешка: Каруцата пред коня
+## 11.6. Данъчни рискови индикатори: Какво вижда НАП, когато отвори файла
+
+### Защо тази секция е тук
+
+Номенклатурчиците от обучителните центрове обичат да повтарят, че SAF-T е „само административен ангажимент". Не е. SAF-T е **рентген на счетоводната политика** — и НАП ще го чете като рентген, не като декларация. Всяко решение, което счетоводителят е взел през годината — полезен живот на актив, обезценка на вземане, отписване на запас — вече не е скрито в папка на рафта. То е в XML, машинночетимо, сравнимо с десетки хиляди други фирми.
+
+Тази секция не е за това как да „скриете" нещо. Точно обратното — тя е за това **какви сигнали вашите данни излъчват**, за да можете да ги видите преди НАП.
+
+### 11.6.1. Активи и амортизации: Полезният живот като рисков сигнал
+
+Когато НАП отвори `SourceDocuments > AssetTransactions` и `MasterFiles > PhysicalStock`, първото нещо, което алгоритъмът ще направи, е да сравни **счетоводния полезен живот** с **данъчно признатите норми** по чл. 55 от ЗКПО.
+
+**Какво „свети" в червено:**
+
+- Сграда с полезен живот 10 години (данъчна норма: 25 години / 4%)
+- Компютър с полезен живот 10 години (данъчна норма: 2 години / 50%)
+- Автомобил, амортизиран за 2 години (данъчна норма: ~6.5 години / 15%)
+- Напълно амортизирани активи, които все още генерират приходи — класически въпрос „защо активът е на нула, а приходите от него растат?"
+- Активи с нулева остатъчна стойност, но без отписване
+
+**Защо е проблем:** Агресивната счетоводна амортизация (по-кратък полезен живот от данъчния) създава **данъчна временна разлика**, която трябва да е отразена в ГДД и в данъчния амортизационен план (ДАП). Ако SAF-T показва счетоводна амортизация 50 000 лв., а ДАП-ът признава 20 000 лв., разликата от 30 000 лв. трябва да увеличи финансовия резултат. Ако не е увеличен — имате проблем.
+
+```python
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import Optional
+
+@dataclass
+class AssetRiskIndicator:
+    asset_id: str
+    description: str
+    accounting_useful_life: int      # Счетоводен полезен живот (месеци)
+    tax_useful_life: int             # Данъчен полезен живот (месеци)
+    acquisition_value: Decimal
+    accumulated_depreciation: Decimal
+    annual_depreciation: Decimal
+    revenue_generated: Decimal       # Приходи, свързани с актива
+    risk_score: int                  # 0-100
+    risk_flags: list[str]
+
+# Данъчни амортизационни норми по ЗКПО чл. 55
+ZKPO_TAX_RATES = {
+    'I':   Decimal('0.04'),    # Сгради, конструкции — 4% (25 г.)
+    'II':  Decimal('0.30'),    # Машини, оборудване — 30% (3.3 г.)
+    'III': Decimal('0.10'),    # Транспортни средства — 10% (10 г.) / ≤ 15%
+    'IV':  Decimal('0.50'),    # Компютри, софтуер — 50% (2 г.)
+    'V':   Decimal('0.25'),    # Други — 25% (4 г.)
+    'VI':  Decimal('0.15'),    # Автомобили — 15% (6.67 г.)
+    'VII': Decimal('0.10'),    # Данъчни амортизируеми нематериални — 10%
+}
+
+def analyze_asset_risks(
+    assets: list[dict],
+    revenue_by_asset: dict[str, Decimal]
+) -> list[AssetRiskIndicator]:
+    """Анализира активите за рискови индикатори."""
+
+    results = []
+
+    for asset in assets:
+        flags = []
+        score = 0
+
+        asset_id = asset['asset_id']
+        acq_value = Decimal(str(asset['acquisition_value']))
+        acc_depr = Decimal(str(asset['accumulated_depreciation']))
+        annual_depr = Decimal(str(asset['annual_depreciation']))
+        acct_life_months = asset['accounting_useful_life_months']
+        tax_category = asset.get('tax_category', 'V')
+
+        # 1. Полезен живот: счетоводен vs данъчен
+        tax_rate = ZKPO_TAX_RATES.get(tax_category, Decimal('0.25'))
+        tax_life_months = int(12 / float(tax_rate)) if tax_rate > 0 else 600
+
+        if acct_life_months < tax_life_months * 0.5:
+            flags.append(f"Агресивна амортизация: счетоводен живот "
+                        f"{acct_life_months} мес. < 50% от данъчен {tax_life_months} мес.")
+            score += 30
+        elif acct_life_months < tax_life_months * 0.75:
+            flags.append(f"Ускорена амортизация: {acct_life_months} мес. vs данъчен {tax_life_months} мес.")
+            score += 15
+
+        # 2. Напълно амортизиран, но генерира приходи
+        net_book_value = acq_value - acc_depr
+        revenue = revenue_by_asset.get(asset_id, Decimal('0'))
+
+        if net_book_value <= 0 and revenue > 0:
+            flags.append(f"Нулева балансова стойност, но приходи {revenue:.2f} лв.")
+            score += 25
+
+        # 3. Напълно амортизиран, но не отписан
+        if net_book_value <= 0 and annual_depr == 0 and acq_value > 0:
+            flags.append("Напълно амортизиран актив без отписване")
+            score += 10
+
+        # 4. Несъответствие между амортизация и отчетени разходи
+        expected_annual = acq_value * tax_rate
+        if annual_depr > 0 and annual_depr > expected_annual * Decimal('1.5'):
+            diff = annual_depr - expected_annual
+            flags.append(f"Годишна амортизация {annual_depr:.2f} лв. надвишава "
+                        f"данъчно признатата {expected_annual:.2f} лв. с {diff:.2f} лв.")
+            score += 20
+
+        if flags:
+            results.append(AssetRiskIndicator(
+                asset_id=asset_id,
+                description=asset.get('description', ''),
+                accounting_useful_life=acct_life_months,
+                tax_useful_life=tax_life_months,
+                acquisition_value=acq_value,
+                accumulated_depreciation=acc_depr,
+                annual_depreciation=annual_depr,
+                revenue_generated=revenue,
+                risk_score=min(score, 100),
+                risk_flags=flags,
+            ))
+
+    results.sort(key=lambda r: r.risk_score, reverse=True)
+    return results
+```
+
+### 11.6.2. Несъбираеми вземания и „вечни" салда по разчетни сметки
+
+SAF-T съдържа `GeneralLedgerEntries` с пълна хронология по сметки от група 41x (Клиенти) и 40x (Доставчици), заедно с `CustomerID`/`SupplierID`. Когато НАП види, че едно вземане стои 3+ години без движение, автоматично възниква въпрос: **защо не е обезценено?**
+
+**Какво „свети" в червено:**
+
+- Вземания от клиенти на възраст > 3 години без частично плащане
+- Задължения към доставчици, висящи 5+ години (защо не са платени? Защо не са отписани?)
+- Салда по разчетни сметки с контрагенти, които вече не съществуват (заличени от ТР)
+- Обезценка, направена точно преди подаване на ГДД — „козметична" обезценка
+- Разчети с „неизвестни" контрагенти (липсващ ЕИК, фиктивен SAF-T ID)
+
+**Данъчният риск:** По чл. 34-37 от ЗКПО, обезценките на вземания не са данъчно признати при начисляването им, а при настъпване на конкретни обстоятелства (изтекъл давностен срок, несъстоятелност, заличаване). „Вечните" салда подсказват или пропусната обезценка (изкривен баланс), или умишлено задържане (избягване на данъчен ефект при отписване).
+
+```python
+from datetime import date, timedelta
+
+@dataclass
+class StaleBalanceIndicator:
+    counterpart_id: str
+    counterpart_name: str
+    account: str
+    balance: Decimal
+    last_movement_date: Optional[date]
+    age_days: int
+    risk_flags: list[str]
+    risk_score: int
+
+def analyze_stale_balances(
+    ledger_entries: list[dict],
+    counterparts: dict[str, dict],
+    report_date: date,
+) -> list[StaleBalanceIndicator]:
+    """Открива „вечни" салда по разчетни сметки."""
+
+    # Групиране по контрагент + сметка
+    balances: dict[tuple[str, str], dict] = {}
+
+    RECEIVABLE_ACCOUNTS = {'411', '412', '413', '414', '419'}
+    PAYABLE_ACCOUNTS = {'401', '402', '403', '404', '409'}
+    WATCHLIST = RECEIVABLE_ACCOUNTS | PAYABLE_ACCOUNTS
+
+    for entry in ledger_entries:
+        for line in entry.get('lines', []):
+            acct = line.get('account', '')[:3]
+            cp_id = line.get('counterpart_id')
+
+            if acct not in WATCHLIST or not cp_id:
+                continue
+
+            key = (cp_id, acct)
+            if key not in balances:
+                balances[key] = {
+                    'balance': Decimal('0'),
+                    'last_date': None,
+                    'movement_count': 0,
+                }
+
+            debit = Decimal(str(line.get('debit', 0) or 0))
+            credit = Decimal(str(line.get('credit', 0) or 0))
+            entry_date = entry.get('date')
+
+            balances[key]['balance'] += debit - credit
+            balances[key]['movement_count'] += 1
+
+            if entry_date:
+                d = date.fromisoformat(entry_date) if isinstance(entry_date, str) else entry_date
+                if balances[key]['last_date'] is None or d > balances[key]['last_date']:
+                    balances[key]['last_date'] = d
+
+    results = []
+
+    for (cp_id, acct), data in balances.items():
+        if abs(data['balance']) < Decimal('0.01'):
+            continue
+
+        flags = []
+        score = 0
+
+        last_date = data['last_date']
+        age_days = (report_date - last_date).days if last_date else 9999
+
+        # 1. Възраст на салдото
+        if age_days > 365 * 5:
+            flags.append(f"Салдо без движение > 5 години ({age_days} дни)")
+            score += 40
+        elif age_days > 365 * 3:
+            flags.append(f"Салдо без движение > 3 години ({age_days} дни)")
+            score += 25
+        elif age_days > 365 * 2:
+            flags.append(f"Салдо без движение > 2 години ({age_days} дни)")
+            score += 10
+
+        # 2. Контрагент без валиден ЕИК
+        cp = counterparts.get(cp_id, {})
+        if not cp.get('eik') or cp.get('saft_id', '').startswith('15'):
+            flags.append("Контрагент без валиден ЕИК")
+            score += 15
+
+        # 3. Значителна сума без движение
+        if abs(data['balance']) > Decimal('10000') and age_days > 365:
+            flags.append(f"Значително салдо {data['balance']:.2f} лв. без движение > 1 г.")
+            score += 20
+
+        # 4. Само едно движение (вероятно начално салдо)
+        if data['movement_count'] == 1 and age_days > 365:
+            flags.append("Еднократно движение — вероятно нерегулирано начално салдо")
+            score += 15
+
+        if flags:
+            results.append(StaleBalanceIndicator(
+                counterpart_id=cp_id,
+                counterpart_name=cp.get('name', 'Неизвестен'),
+                account=acct,
+                balance=data['balance'],
+                last_movement_date=last_date,
+                age_days=age_days,
+                risk_flags=flags,
+                risk_score=min(score, 100),
+            ))
+
+    results.sort(key=lambda r: r.risk_score, reverse=True)
+    return results
+```
+
+### 11.6.3. Запаси: Отписвания, обезценки и „вечни" наличности
+
+SAF-T секция `PhysicalStock` (при On Demand) и `MovementOfGoods` дават пълна картина на складовите наличности. НАП може да сравни:
+
+- Наличности в началото на периода + покупки − продажби = **очаквано крайно салдо**
+- Ако реалното крайно салдо е по-ниско — трябва да има **документирано отписване**
+- Ако е по-високо — трябва да има **заприходяване** (излишъци)
+
+**Какво „свети" в червено:**
+
+- Запаси, които не са се „мръднали" 12+ месеца — класически кандидат за обезценка по СС 2
+- Масови отписвания в края на годината (декемврийски „чистки") — алгоритъмът ще забележи сезонността
+- Стоки с отрицателни количества (продадено повече от наличното — липса на складова дисциплина)
+- Несъответствие между `PhysicalStock` и сметка 30x в `GeneralLedgerEntries`
+- Обезценка на запаси без последващо движение (обезценено, но нито продадено, нито бракувано)
+
+**Данъчният риск:** Отписаните запаси са данъчно признат разход **само** при документална обоснованост (протокол за брак, акт за липси, решение на управителя). Масови отписвания без документация = увеличение на финансовия резултат + ДДС корекция по чл. 79 от ЗДДС.
+
+```python
+@dataclass
+class InventoryRiskIndicator:
+    product_id: str
+    product_name: str
+    quantity_on_hand: Decimal
+    last_movement_date: Optional[date]
+    days_without_movement: int
+    total_write_offs_year: Decimal
+    write_off_months: list[int]       # В кои месеци са отписвани
+    ledger_value: Decimal             # Стойност по сметка 30x
+    stock_value: Decimal              # Стойност по PhysicalStock
+    risk_flags: list[str]
+    risk_score: int
+
+def analyze_inventory_risks(
+    stock_items: list[dict],
+    movements: list[dict],
+    ledger_balances: dict[str, Decimal],
+    report_date: date,
+) -> list[InventoryRiskIndicator]:
+    """Анализира складови наличности за рискови индикатори."""
+
+    results = []
+
+    for item in stock_items:
+        flags = []
+        score = 0
+        product_id = item['product_id']
+        qty = Decimal(str(item.get('quantity', 0)))
+        value = Decimal(str(item.get('value', 0)))
+
+        # Движения за този продукт
+        item_movements = [m for m in movements if m.get('product_id') == product_id]
+
+        # Последно движение
+        if item_movements:
+            dates = [date.fromisoformat(m['date']) if isinstance(m['date'], str)
+                     else m['date'] for m in item_movements]
+            last_move = max(dates)
+            days_idle = (report_date - last_move).days
+        else:
+            last_move = None
+            days_idle = 9999
+
+        # 1. Залежали запаси (без движение)
+        if days_idle > 365:
+            flags.append(f"Без движение {days_idle} дни — кандидат за обезценка по СС 2")
+            score += 25
+        if days_idle > 730:
+            score += 15  # Допълнително за > 2 години
+
+        # 2. Отрицателни количества
+        if qty < 0:
+            flags.append(f"Отрицателно количество: {qty} — продадено повече от наличното")
+            score += 35
+
+        # 3. Масови отписвания в края на годината
+        write_offs = [m for m in item_movements
+                      if m.get('movement_type') in ('write_off', 'scrap', 'loss', 'брак', 'липса')]
+        write_off_total = sum(Decimal(str(m.get('value', 0))) for m in write_offs)
+        write_off_months = []
+        for wo in write_offs:
+            d = date.fromisoformat(wo['date']) if isinstance(wo['date'], str) else wo['date']
+            write_off_months.append(d.month)
+
+        december_write_offs = sum(1 for m in write_off_months if m == 12)
+        if december_write_offs > 0 and len(write_offs) > 0:
+            dec_ratio = december_write_offs / len(write_offs)
+            if dec_ratio > 0.6:
+                flags.append(f"Декемврийски чистки: {december_write_offs}/{len(write_offs)} "
+                            f"отписвания са в м.12 ({write_off_total:.2f} лв.)")
+                score += 20
+
+        # 4. Несъответствие между складова и счетоводна стойност
+        ledger_key = f"30x:{product_id}"
+        ledger_val = ledger_balances.get(ledger_key, value)
+        if abs(value - ledger_val) > Decimal('0.01') and value > 0:
+            diff_pct = abs(value - ledger_val) / value * 100
+            if diff_pct > 5:
+                flags.append(f"Разлика склад/книга: {value:.2f} vs {ledger_val:.2f} "
+                            f"({diff_pct:.1f}%)")
+                score += 20
+
+        if flags:
+            results.append(InventoryRiskIndicator(
+                product_id=product_id,
+                product_name=item.get('description', ''),
+                quantity_on_hand=qty,
+                last_movement_date=last_move,
+                days_without_movement=days_idle,
+                total_write_offs_year=write_off_total,
+                write_off_months=write_off_months,
+                ledger_value=ledger_val,
+                stock_value=value,
+                risk_flags=flags,
+                risk_score=min(score, 100),
+            ))
+
+    results.sort(key=lambda r: r.risk_score, reverse=True)
+    return results
+```
+
+### 11.6.4. Разходи със смесено ползване: Невидимият капан
+
+Това е може би най-подценяваният риск. В SAF-T всеки разход е свързан със сметка, контрагент и (ако има) данъчен код. Когато фирма осчетоводява **100% от разходите за автомобил, телефон, наем или командировки**, без аналитичност за лично/служебно ползване, алгоритъмът на НАП може да направи проста проверка:
+
+**Какво „свети" в червено:**
+
+- Разходи за горива (сметка 602/601) без пътни листове или GPS данни — пълен данъчен кредит при 100% лично ползване?
+- Наем на имот, осчетоводен 100% като разход, но имотът се ползва и за жилище
+- Телекомуникационни разходи без разделяне лично/служебно
+- Командировъчни разходи без заповеди за командировка
+- Представителни разходи над 1% от приходите
+
+**Данъчният риск:** По чл. 204, ал. 1, т. 4 от ЗКПО разходите в натура, свързани с лично ползване, се облагат с данък върху разходите (10%). Ако няма разделяне — НАП може да приеме, че **целият разход е за лично ползване**.
+
+```python
+@dataclass
+class MixedUseExpenseIndicator:
+    account: str
+    account_name: str
+    total_amount: Decimal
+    counterparts: list[str]
+    has_analytics: bool          # Има ли аналитичност лично/служебно
+    personal_use_ratio: Optional[Decimal]  # Деклариран % лично ползване
+    risk_flags: list[str]
+    risk_score: int
+
+# Сметки, типично свързани със смесено ползване
+MIXED_USE_ACCOUNTS = {
+    '6021': 'Горива и смазочни материали',
+    '6022': 'Резервни части',
+    '602':  'Разходи за материали',
+    '609':  'Други разходи за дейността',
+    '601':  'Разходи за суровини и материали',
+    '614':  'Разходи за телекомуникации',
+    '613':  'Разходи за наеми',
+    '616':  'Разходи за застраховки',
+    '617':  'Разходи за командировки',
+    '618':  'Разходи за представителни цели',
+}
+
+def analyze_mixed_use_expenses(
+    journal_entries: list[dict],
+    company_revenue: Decimal,
+    analytics_available: dict[str, bool],
+) -> list[MixedUseExpenseIndicator]:
+    """Идентифицира разходи със смесено ползване без аналитичност."""
+
+    # Агрегиране по сметка
+    account_totals: dict[str, dict] = {}
+
+    for entry in journal_entries:
+        for line in entry.get('lines', []):
+            acct = line.get('account', '')
+            # Проверка дали сметката е в списъка (точно съвпадение или по първи 3 цифри)
+            matched_acct = None
+            if acct in MIXED_USE_ACCOUNTS:
+                matched_acct = acct
+            elif acct[:3] in MIXED_USE_ACCOUNTS:
+                matched_acct = acct[:3]
+
+            if not matched_acct:
+                continue
+
+            debit = Decimal(str(line.get('debit', 0) or 0))
+            if debit <= 0:
+                continue
+
+            if matched_acct not in account_totals:
+                account_totals[matched_acct] = {
+                    'total': Decimal('0'),
+                    'counterparts': set(),
+                }
+
+            account_totals[matched_acct]['total'] += debit
+            cp = line.get('counterpart_id', '')
+            if cp:
+                account_totals[matched_acct]['counterparts'].add(cp)
+
+    results = []
+
+    for acct, data in account_totals.items():
+        flags = []
+        score = 0
+
+        has_analytics = analytics_available.get(acct, False)
+        acct_name = MIXED_USE_ACCOUNTS.get(acct, f'Сметка {acct}')
+
+        # 1. Няма аналитичност за лично/служебно
+        if not has_analytics:
+            flags.append(f"Няма аналитичност лично/служебно за {acct_name}")
+            score += 25
+
+        # 2. Представителни разходи > 1% от приходите
+        if acct in ('618',) and company_revenue > 0:
+            ratio = data['total'] / company_revenue * 100
+            if ratio > 1:
+                flags.append(f"Представителни разходи {ratio:.2f}% от приходите "
+                            f"(над типичния праг)")
+                score += 20
+
+        # 3. Горива без аналитичност — висок риск
+        if acct in ('6021', '602') and not has_analytics:
+            flags.append("Горива без пътни листове / GPS аналитичност")
+            score += 20
+
+        # 4. Значителни суми
+        if data['total'] > Decimal('50000'):
+            flags.append(f"Значителна сума: {data['total']:.2f} лв.")
+            score += 10
+
+        if flags:
+            results.append(MixedUseExpenseIndicator(
+                account=acct,
+                account_name=acct_name,
+                total_amount=data['total'],
+                counterparts=list(data['counterparts'])[:10],
+                has_analytics=has_analytics,
+                personal_use_ratio=None,
+                risk_flags=flags,
+                risk_score=min(score, 100),
+            ))
+
+    results.sort(key=lambda r: r.risk_score, reverse=True)
+    return results
+```
+
+### 11.6.5. Обобщен Risk Score: Всичко в едно число
+
+В реалния свят НАП няма да гледа всеки индикатор поотделно. Ще има **композитен risk score** — едно число, което определя дали фирмата влиза в списъка за проверка. Ето как можете да изчислите вашия собствен, преди те да го направят:
+
+```python
+@dataclass
+class CompanyRiskProfile:
+    company_id: str
+    company_name: str
+    total_risk_score: int
+    risk_category: str            # LOW / MEDIUM / HIGH / CRITICAL
+    asset_risks: int              # Брой рискови индикатори
+    stale_balance_risks: int
+    inventory_risks: int
+    mixed_use_risks: int
+    top_flags: list[str]          # Топ 5 най-тежки сигнали
+
+def calculate_company_risk_profile(
+    company_id: str,
+    company_name: str,
+    asset_indicators: list[AssetRiskIndicator],
+    balance_indicators: list[StaleBalanceIndicator],
+    inventory_indicators: list[InventoryRiskIndicator],
+    expense_indicators: list[MixedUseExpenseIndicator],
+) -> CompanyRiskProfile:
+    """Обобщен рисков профил на фирмата."""
+
+    # Претеглени средни стойности по категория
+    def weighted_avg(indicators, weight):
+        if not indicators:
+            return 0
+        avg = sum(i.risk_score for i in indicators) / len(indicators)
+        return int(avg * weight)
+
+    asset_score = weighted_avg(asset_indicators, 0.30)
+    balance_score = weighted_avg(balance_indicators, 0.25)
+    inventory_score = weighted_avg(inventory_indicators, 0.25)
+    expense_score = weighted_avg(expense_indicators, 0.20)
+
+    total = asset_score + balance_score + inventory_score + expense_score
+
+    # Категоризация
+    if total >= 70:
+        category = "CRITICAL"
+    elif total >= 45:
+        category = "HIGH"
+    elif total >= 25:
+        category = "MEDIUM"
+    else:
+        category = "LOW"
+
+    # Топ 5 сигнали
+    all_flags = []
+    for ind in asset_indicators:
+        all_flags.extend([(ind.risk_score, f) for f in ind.risk_flags])
+    for ind in balance_indicators:
+        all_flags.extend([(ind.risk_score, f) for f in ind.risk_flags])
+    for ind in inventory_indicators:
+        all_flags.extend([(ind.risk_score, f) for f in ind.risk_flags])
+    for ind in expense_indicators:
+        all_flags.extend([(ind.risk_score, f) for f in ind.risk_flags])
+
+    all_flags.sort(key=lambda x: x[0], reverse=True)
+    top_flags = [f[1] for f in all_flags[:5]]
+
+    return CompanyRiskProfile(
+        company_id=company_id,
+        company_name=company_name,
+        total_risk_score=min(total, 100),
+        risk_category=category,
+        asset_risks=len(asset_indicators),
+        stale_balance_risks=len(balance_indicators),
+        inventory_risks=len(inventory_indicators),
+        mixed_use_risks=len(expense_indicators),
+        top_flags=top_flags,
+    )
+```
+
+### 11.6.6. Какво да направите с тази информация
+
+Преди да подадете SAF-T, пуснете горните скриптове върху собствените си данни. Ако виждате `CRITICAL` или `HIGH` — **не подавайте, докато не изчистите**. Не защото ще ви глобят за подаване на верни данни, а защото:
+
+1. **Данните са верни, но картината е изкривена** — агресивна амортизация без данъчна корекция не е счетоводна грешка, а данъчно нарушение.
+2. **„Вечните" салда не са технически проблем** — те са индикатор за пропуснати счетоводни операции (обезценки, отписвания), които имат данъчен ефект.
+3. **Липсата на аналитичност не е оправдание** — тя е самият проблем. САФ-Т ще покаже, че нямате разделяне, а НАП ще приеме най-лошия за вас вариант.
+
+> **Правило номер едно: Ако не искате НАП да намери проблем, не го създавайте. А ако сте го създали — поправете го преди да го подадете в XML.**
+
+## 11.7. Голямата стратегическа грешка: Каруцата пред коня
 
 В края на този практически преглед е важно да назовем „слона в стаята“ – фундаменталната стратегическа грешка на НАП и Министерството на финансите, която заплашва да превърне SAF-T в дигитален вариант на „битката при Ватерло“.
 
@@ -1047,6 +1628,6 @@ if __name__ == '__main__':
 
 > **„Присъдата е ясна: НАП сложи каруцата пред коня. Опитаха се да построят покрива (SAF-T), преди да са излели основите (Електронното фактуриране). Без централизиран хъб за обмен на структурирани данни, SAF-T остава една невъзможна фантазия, която ще роди само хаос, глоби и празни XML файлове. Докато държавата не разбере, че данните се управляват при източника, а не при отчета, проектът ще бъде паметник на административната некомпетентност.“**
 
-## 11.7. Заключение
+## 11.8. Заключение
 
 Урокът е ясен: **няма едно решение за всички**. SAF-T имплементацията трябва да се адаптира към спецификите на бизнеса, но без здрава основа от структурирани данни, тя остава упражнение по безсмислена бюрокрация.
